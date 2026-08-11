@@ -152,6 +152,14 @@ describe('compileSchema', () => {
       });
       expect(definition.children[0].defaultValue).to.equal('Untitled');
     });
+
+    it('carries description onto the node', () => {
+      const { definition } = compileSchema({
+        type: 'object',
+        properties: { slug: { type: 'string', description: 'Lowercase, hyphen-separated.' } },
+      });
+      expect(definition.children[0].description).to.equal('Lowercase, hyphen-separated.');
+    });
   });
 
   describe('$ref', () => {

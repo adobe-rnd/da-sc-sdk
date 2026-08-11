@@ -184,6 +184,7 @@ These keywords describe presentation. They do not constrain the value.
 | Keyword     | Type      | Applies to | Effect |
 | ----------- | --------- | ---------- | ------ |
 | `title`     | string    | any        | Label shown above the input. **Required on every node** (rule R4). |
+| `description` | string  | any        | Help text shown with the field (above the input). Does not constrain the value. |
 | `default`   | matches type | any     | Pre-fills the field when the document has no value. |
 | `readOnly`  | boolean   | any        | Disables the input. The value remains visible. |
 | `required`  | string[]  | object     | Names properties whose absence shows `"This field is required."` |

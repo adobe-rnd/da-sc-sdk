@@ -204,6 +204,7 @@ function getDefaults({ schema = {}, kind }) {
   return {
     readonly: !!(schema.readOnly ?? schema.readonly),
     defaultValue: schema.default,
+    description: schema.description,
     validation: pickValidation(schema),
     minItems: kind === 'array' ? schema.minItems : undefined,
     maxItems: kind === 'array' ? schema.maxItems : undefined,
@@ -357,6 +358,7 @@ function compileNode({
     required,
     readonly: defaults.readonly,
     defaultValue: defaults.defaultValue,
+    description: defaults.description,
     validation: defaults.validation,
   };
 
