@@ -143,7 +143,7 @@ describe('validateDocument', () => {
           keyword: 'pattern',
           instancePath: '/data/code',
           params: { pattern: '^\\d+$' },
-          message: 'Must match the required pattern.',
+          message: 'Must match the pattern "^\\d+$".',
         },
       });
     });

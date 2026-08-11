@@ -110,7 +110,10 @@ function validateString({ node, errors }) {
       pushError(errors, node.pointer, {
         keyword: 'pattern',
         params: { pattern: validation.pattern },
-        message: 'Must match the required pattern.',
+        // Include the pattern itself — the only field-specific detail we have.
+        // A schema-authored message would be friendlier, but that is a separate
+        // feature; showing the rule beats "the required pattern".
+        message: `Must match the pattern "${validation.pattern}".`,
       });
     }
   }
