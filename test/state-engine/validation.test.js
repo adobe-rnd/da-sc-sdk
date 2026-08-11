@@ -85,6 +85,43 @@ describe('validateDocument', () => {
       expect(errors['/data/items']?.params?.missingProperty).to.equal('items');
     });
 
+    it('words the required message for the control: object is a section', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['seo'],
+          properties: { seo: { type: 'object', properties: { mt: { type: 'string' } } } },
+        },
+        { seo: {} },
+      );
+      expect(errors['/data/seo']?.keyword).to.equal('required');
+      expect(errors['/data/seo']?.message).to.equal('This section is required.');
+    });
+
+    it('words the required message for the control: array asks for an item', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['items'],
+          properties: { items: { type: 'array', items: { type: 'string' } } },
+        },
+        { items: [] },
+      );
+      expect(errors['/data/items']?.message).to.equal('Must contain at least one item.');
+    });
+
+    it('reflects minItems in the required message for an empty array', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['items'],
+          properties: { items: { type: 'array', minItems: 3, items: { type: 'string' } } },
+        },
+        { items: [] },
+      );
+      expect(errors['/data/items']?.message).to.equal('Must contain at least 3 items.');
+    });
+
     it('flags a required-field violation inside an array-root item at the field pointer', () => {
       const { errors } = setup(
         {

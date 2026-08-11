@@ -193,6 +193,23 @@ function validateArray({ node, errors }) {
   }
 }
 
+// A required object is a section and a required array needs items — "field"
+// only fits a single input. Word the message to the control the author sees.
+// An empty array never reaches the minItems check (it short-circuits as
+// absent), so surface its minItems here when it asks for more than one.
+function requiredMessage(child) {
+  if (child.kind === 'object') { return 'This section is required.'; }
+  if (child.kind === 'array') {
+    // Match the minItems message voice so the empty case and the under-count
+    // case read the same ("Must contain at least …"), not a mixed "Add …".
+    const min = child.minItems;
+    return typeof min === 'number' && min > 1
+      ? `Must contain at least ${min} items.`
+      : 'Must contain at least one item.';
+  }
+  return 'This field is required.';
+}
+
 function emitRequiredForChildren({ node, errors }) {
   if (node.kind !== 'object' || !Array.isArray(node.children)) { return; }
   for (const child of node.children) {
@@ -200,7 +217,7 @@ function emitRequiredForChildren({ node, errors }) {
       pushError(errors, child.pointer, {
         keyword: 'required',
         params: { missingProperty: child.key },
-        message: 'This field is required.',
+        message: requiredMessage(child),
       });
     }
   }
