@@ -333,6 +333,28 @@ describe('validateDocument', () => {
         message: 'Must contain at most 2 items.',
       });
     });
+
+    it('counts only items for minItems (empty rows do not count)', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: { items: { type: 'array', minItems: 3, items: { type: 'string' } } },
+        },
+        { items: ['', '', ''] },
+      );
+      expect(errors['/data/items']?.keyword).to.equal('minItems');
+    });
+
+    it('accepts when enough items are non-empty, ignoring blank rows', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: { items: { type: 'array', minItems: 2, items: { type: 'string' } } },
+        },
+        { items: ['a', '', 'b'] },
+      );
+      expect(errors).to.deep.equal({});
+    });
   });
 
   describe('form-empty values treated as absent', () => {

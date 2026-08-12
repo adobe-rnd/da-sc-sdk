@@ -176,7 +176,11 @@ function validateArray({ node, errors }) {
     });
     return;
   }
-  if (node.minItems !== undefined && value.length < node.minItems) {
+  // Count only non-empty entries: empty items are stripped on save, so the
+  // saved document would not actually contain them. Validating raw length lets
+  // e.g. three blank rows satisfy minItems:3 even though none would persist.
+  const count = value.filter((item) => !isEmpty(item)).length;
+  if (node.minItems !== undefined && count < node.minItems) {
     pushError(errors, node.pointer, {
       keyword: 'minItems',
       params: { limit: node.minItems },
@@ -184,7 +188,7 @@ function validateArray({ node, errors }) {
     });
     return;
   }
-  if (node.maxItems !== undefined && value.length > node.maxItems) {
+  if (node.maxItems !== undefined && count > node.maxItems) {
     pushError(errors, node.pointer, {
       keyword: 'maxItems',
       params: { limit: node.maxItems },
