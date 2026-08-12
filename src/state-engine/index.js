@@ -142,7 +142,12 @@ function canRemove(definition, node) {
   if (!node || node.kind !== 'array') { return false; }
   if (definition.readonly) { return false; }
   const count = node.items?.length ?? 0;
-  return count > (definition.minItems ?? 0);
+  // Only a required array holds a floor at minItems — those rows must stay. An
+  // optional array can always be cleared back to empty (it prunes to absent,
+  // which is valid), so blocking removal there would strand rows the author
+  // added and then wanted to drop.
+  const floor = definition.required ? (definition.minItems ?? 0) : 0;
+  return count > floor;
 }
 
 function canReorder(definition, node) {

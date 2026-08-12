@@ -238,7 +238,21 @@ describe('createEngine', () => {
       expect(next.document.data.items).to.deep.equal(['a', '', 'b']);
     });
 
-    it('removeItem respects minItems', async () => {
+    it('removeItem respects minItems on a required array', async () => {
+      const schema = {
+        type: 'object',
+        required: ['items'],
+        properties: {
+          items: { type: 'array', minItems: 2, items: { type: 'string' } },
+        },
+      };
+      const core = createEngine({ schema, document: { metadata: {}, data: { items: ['a', 'b'] } } });
+      core.removeItem('/data/items/0');
+      // unchanged: a required array must keep at least minItems rows.
+      expect(core.getState().document.data.items).to.deep.equal(['a', 'b']);
+    });
+
+    it('removeItem can clear an optional array below minItems', async () => {
       const schema = {
         type: 'object',
         properties: {
@@ -247,8 +261,9 @@ describe('createEngine', () => {
       };
       const core = createEngine({ schema, document: { metadata: {}, data: { items: ['a', 'b'] } } });
       core.removeItem('/data/items/0');
-      // unchanged because removal would violate minItems
-      expect(core.getState().document.data.items).to.deep.equal(['a', 'b']);
+      // An optional array can be emptied — minItems only constrains it when
+      // present, and an empty optional array prunes to absent (valid).
+      expect(core.getState().document.data.items).to.deep.equal(['b']);
     });
 
     it('addItem respects maxItems', async () => {
