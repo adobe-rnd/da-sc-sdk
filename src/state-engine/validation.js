@@ -166,6 +166,10 @@ function validateBoolean({ node, errors }) {
   }
 }
 
+function arrayMinMessage(min) {
+  return min <= 1 ? 'Must contain at least one item.' : `Must contain at least ${min} items.`;
+}
+
 function validateArray({ node, errors }) {
   const { value } = node;
   if (!Array.isArray(value)) {
@@ -180,11 +184,14 @@ function validateArray({ node, errors }) {
   // saved document would not actually contain them. Validating raw length lets
   // e.g. three blank rows satisfy minItems:3 even though none would persist.
   const count = value.filter((item) => !isEmpty(item)).length;
-  if (node.minItems !== undefined && count < node.minItems) {
+  // A required array needs at least one non-empty item even without minItems —
+  // otherwise a row full of blanks (which strips to nothing) looks satisfied.
+  const min = node.required ? Math.max(node.minItems ?? 0, 1) : node.minItems;
+  if (min !== undefined && count < min) {
     pushError(errors, node.pointer, {
       keyword: 'minItems',
-      params: { limit: node.minItems },
-      message: `Must contain at least ${node.minItems} items.`,
+      params: { limit: min },
+      message: arrayMinMessage(min),
     });
     return;
   }
@@ -204,12 +211,9 @@ function validateArray({ node, errors }) {
 function requiredMessage(child) {
   if (child.kind === 'object') { return 'This section is required.'; }
   if (child.kind === 'array') {
-    // Match the minItems message voice so the empty case and the under-count
-    // case read the same ("Must contain at least …"), not a mixed "Add …".
-    const min = child.minItems;
-    return typeof min === 'number' && min > 1
-      ? `Must contain at least ${min} items.`
-      : 'Must contain at least one item.';
+    // A required array needs at least one non-empty item (or minItems). Shares
+    // the wording used by validateArray so both paths read the same.
+    return arrayMinMessage(Math.max(child.minItems ?? 0, 1));
   }
   return 'This field is required.';
 }

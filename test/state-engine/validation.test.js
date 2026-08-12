@@ -355,6 +355,19 @@ describe('validateDocument', () => {
       );
       expect(errors).to.deep.equal({});
     });
+
+    it('flags a required array whose only rows are empty (no minItems)', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['items'],
+          properties: { items: { type: 'array', items: { type: 'string' } } },
+        },
+        { items: [''] },
+      );
+      expect(errors['/data/items']?.keyword).to.equal('minItems');
+      expect(errors['/data/items']?.message).to.equal('Must contain at least one item.');
+    });
   });
 
   describe('form-empty values treated as absent', () => {
