@@ -46,17 +46,7 @@
 // Invalid `pattern` is caught at schema-compile time (schema.js) and
 // surfaces on `schemaIssues`, not here.
 
-function isObject(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isEmpty(value) {
-  if (value === null || value === undefined || value === '') { return true; }
-  if (typeof value === 'string' && value.trim() === '') { return true; }
-  if (Array.isArray(value)) { return value.length === 0; }
-  if (isObject(value)) { return Object.keys(value).length === 0; }
-  return false;
-}
+import { isDataEmpty } from './empty.js';
 
 // First error per pointer wins. Helper makes that rule explicit at every
 // call site instead of buried in the walk.
@@ -183,7 +173,9 @@ function validateArray({ node, errors }) {
   // Count only non-empty entries: empty items are stripped on save, so the
   // saved document would not actually contain them. Validating raw length lets
   // e.g. three blank rows satisfy minItems:3 even though none would persist.
-  const count = value.filter((item) => !isEmpty(item)).length;
+  // Emptiness is RECURSIVE here — a row like `{ name: '' }` prunes to nothing,
+  // so it must not count toward the minimum even though it has a key.
+  const count = value.filter((item) => !isDataEmpty(item)).length;
   // A required array needs at least one non-empty item even without minItems —
   // otherwise a row full of blanks (which strips to nothing) looks satisfied.
   const min = node.required ? Math.max(node.minItems ?? 0, 1) : node.minItems;
@@ -221,7 +213,10 @@ function requiredMessage(child) {
 function emitRequiredForChildren({ node, errors }) {
   if (node.kind !== 'object' || !Array.isArray(node.children)) { return; }
   for (const child of node.children) {
-    if (child.required && isEmpty(child.value)) {
+    // Presence is RECURSIVE: a required object/array whose only content is
+    // empty leaves (e.g. `{ title: '' }`) prunes away entirely on save, so it
+    // must be flagged as missing even though it is a shallowly-populated value.
+    if (child.required && isDataEmpty(child.value)) {
       pushError(errors, child.pointer, {
         keyword: 'required',
         params: { missingProperty: child.key },
@@ -236,9 +231,11 @@ function validateNodeValue({ node, errors }) {
   // Unsupported subtrees are not rendered; values pass through unvalidated.
   if (node.kind === 'unsupported') { return; }
   // Form-empty values count as absent — constraints (enum, pattern, etc.)
-  // do not fire. `required` is checked at the parent level separately, so
-  // an empty required field is still flagged there.
-  if (isEmpty(node.value)) { return; }
+  // do not fire. Emptiness is recursive: an array of only blank rows, or an
+  // object of only blank leaves, prunes to nothing on save, so it is treated
+  // as absent here too. `required` is checked at the parent level separately,
+  // so an empty required field is still flagged there.
+  if (isDataEmpty(node.value)) { return; }
 
   if (node.kind === 'string') {
     validateString({ node, errors });
@@ -256,7 +253,15 @@ function traverse(node, errors) {
   validateNodeValue({ node, errors });
   emitRequiredForChildren({ node, errors });
   if (Array.isArray(node.children)) { node.children.forEach((c) => traverse(c, errors)); }
-  if (Array.isArray(node.items)) { node.items.forEach((c) => traverse(c, errors)); }
+  // Skip recursively-empty array rows: a blank row prunes to nothing on save,
+  // so validating its interior (nested `required`, patterns, etc.) would flag
+  // content that will never be persisted. The moment a row carries any value
+  // it is validated normally.
+  if (Array.isArray(node.items)) {
+    node.items.forEach((c) => {
+      if (!isDataEmpty(c.value)) { traverse(c, errors); }
+    });
+  }
 }
 
 export function validateDocument({ document, model }) {

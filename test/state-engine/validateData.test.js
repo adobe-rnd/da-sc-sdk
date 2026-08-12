@@ -140,16 +140,18 @@ describe('validateData', () => {
   });
 
   it('flags a required-field violation inside an array-root item', () => {
+    // `note` gives the row content so it survives pruning; a row of only blank
+    // leaves would be treated as absent and left unvalidated.
     const result = validateData({
       schema: {
         type: 'array',
         items: {
           type: 'object',
           required: ['name'],
-          properties: { name: { type: 'string' } },
+          properties: { name: { type: 'string' }, note: { type: 'string' } },
         },
       },
-      data: [{ name: '' }],
+      data: [{ name: '', note: 'kept' }],
     });
     expect(result.errors['/data/0/name']?.keyword).to.equal('required');
     expect(result.errors['/data/0/name']?.params?.missingProperty).to.equal('name');

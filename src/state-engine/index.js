@@ -14,6 +14,7 @@ import { compileSchema } from './schema.js';
 import { buildModel, nodeAt } from './model.js';
 import { validateDocument } from './validation.js';
 import { definitionAt, getParentPointer } from './pointer.js';
+import { isDataEmpty } from './empty.js';
 import {
   addItem as applyAdd,
   insertItem as applyInsert,
@@ -39,21 +40,10 @@ function parseDocument(document) {
   return next;
 }
 
-// Mirrors prune() in html/utils.js: a value is "empty" iff it would be
-// stripped from the saved HTML. Keep the two definitions symmetric — defaults
-// materialize exactly when the loaded document, after applying the same
-// stripping rules, has no surviving content. If html/utils.js changes what it
-// strips, this must change too.
-export function isDataEmpty(value) {
-  if (value === null || value === undefined || value === '') { return true; }
-  if (typeof value === 'string') { return value.trim() === ''; }
-  if (Array.isArray(value)) { return value.length === 0 || value.every(isDataEmpty); }
-  if (typeof value === 'object') {
-    const entries = Object.values(value);
-    return entries.length === 0 || entries.every(isDataEmpty);
-  }
-  return false;
-}
+// The canonical "form-empty" predicate lives in ./empty.js so validation,
+// defaults, and save all decide presence the same way. Re-exported here to
+// keep the existing import surface (and the isDataEmpty ↔ prune symmetry test).
+export { isDataEmpty };
 
 // Walk the compiled definition tree and produce a partial document containing
 // only keys that carry a real schema default (recursively). Fields without
