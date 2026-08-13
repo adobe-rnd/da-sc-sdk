@@ -158,6 +158,49 @@ describe('validateDocument', () => {
       expect(errors['/data/seo']?.message).to.equal('This section is required.');
     });
 
+    it('flags both the section and its required child when a required section is empty', () => {
+      // An empty required section reports at the section (it prunes away) AND at
+      // its own required child — each at its own pointer.
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['seo'],
+          properties: {
+            seo: {
+              type: 'object',
+              required: ['metaTitle'],
+              properties: { metaTitle: { type: 'string' }, metaDescription: { type: 'string' } },
+            },
+          },
+        },
+        { seo: { metaTitle: '' } },
+      );
+      expect(errors['/data/seo']?.keyword).to.equal('required');
+      expect(errors['/data/seo']?.message).to.equal('This section is required.');
+      expect(errors['/data/seo/metaTitle']?.keyword).to.equal('required');
+    });
+
+    it('validates inside a section that has content (only the missing child fires)', () => {
+      // The section is not empty (metaDescription has content), so it is not
+      // flagged as required — but the missing required metaTitle still is.
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['seo'],
+          properties: {
+            seo: {
+              type: 'object',
+              required: ['metaTitle'],
+              properties: { metaTitle: { type: 'string' }, metaDescription: { type: 'string' } },
+            },
+          },
+        },
+        { seo: { metaTitle: '', metaDescription: 'A description.' } },
+      );
+      expect(errors['/data/seo']).to.equal(undefined);
+      expect(errors['/data/seo/metaTitle']?.keyword).to.equal('required');
+    });
+
     it('flags a required object-array whose only row is a blank object', () => {
       const { errors } = setup(
         {
@@ -389,6 +432,20 @@ describe('validateDocument', () => {
       });
     });
 
+    it('counts only non-empty items for maxItems (blank rows do not count)', () => {
+      // Raw length is 4, but only two rows have content and the blanks prune
+      // away on save — so maxItems:2 is satisfied. (If maxItems counted raw
+      // length instead of content, this would wrongly fail.)
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: { items: { type: 'array', maxItems: 2, items: { type: 'string' } } },
+        },
+        { items: ['a', '', '', 'b'] },
+      );
+      expect(errors).to.deep.equal({});
+    });
+
     it('counts only items for minItems (blank rows do not count toward the minimum)', () => {
       // One real item keeps the array present; the two blank rows must not push
       // it to the minimum, since they prune away on save.
@@ -573,6 +630,26 @@ describe('validateDocument', () => {
     expect(errors).to.deep.equal({});
   });
 
+  it('ignores unsupported constraint keywords (multipleOf, const, uniqueItems, exclusiveMinimum, numeric enum)', () => {
+    // Only the keyword set in schema-spec.md is enforced; the compiler drops the
+    // rest, so data that violates them is still valid. All values are non-empty
+    // so they are actually validated for the supported keywords (type), and the
+    // unsupported constraints simply do not fire.
+    const { errors } = setup(
+      {
+        type: 'object',
+        properties: {
+          n: { type: 'number', multipleOf: 5, exclusiveMinimum: 0 },
+          s: { type: 'string', const: 'X' },
+          tags: { type: 'array', uniqueItems: true, items: { type: 'string' } },
+          e: { type: 'number', enum: [1, 2] },
+        },
+      },
+      { n: 7, s: 'Y', tags: ['x', 'x'], e: 99 },
+    );
+    expect(errors).to.deep.equal({});
+  });
+
   // The guarantee: when validateDocument reports no errors, the SAVED document
   // (prune of the same data) still satisfies the schema's structural keywords.
   // This is NOT circular — prune() is independent of validateDocument, and each
@@ -628,6 +705,73 @@ describe('validateDocument', () => {
       const { errors, pruned } = validAndPruned(schema, { tags: ['a', '', 'b'] });
       expect(errors).to.deep.equal({});
       expect(pruned.tags.length).to.be.at.most(2);
+    });
+  });
+
+  // The recursion (emptiness, presence, counting) must hold at any depth, not
+  // just one level. This structure nests array → object → array → object → array
+  // of strings, so errors have to be found and reported at 4-deep pointers.
+  describe('deep nesting (array of objects containing a nested array of objects)', () => {
+    const deepSchema = {
+      type: 'object',
+      properties: {
+        chapters: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            required: ['heading', 'sections'],
+            properties: {
+              heading: { type: 'string', minLength: 2 },
+              sections: {
+                type: 'array',
+                minItems: 1,
+                items: {
+                  type: 'object',
+                  required: ['label'],
+                  properties: {
+                    label: { type: 'string' },
+                    keywords: { type: 'array', minItems: 2, items: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    it('surfaces a violation at every level of a blank nested structure', () => {
+      const { errors } = setup(deepSchema, {
+        chapters: [{ heading: '', sections: [{ label: '', keywords: [''] }] }],
+      });
+      // Optional array present-but-short -> minItems; required array recursively
+      // empty -> required (both worded "items with content"); required scalars ->
+      // "This field is required." — each at its own deep pointer.
+      expect(errors['/data/chapters']?.keyword).to.equal('minItems');
+      expect(errors['/data/chapters/0/heading']?.keyword).to.equal('required');
+      expect(errors['/data/chapters/0/sections']?.keyword).to.equal('required');
+      expect(errors['/data/chapters/0/sections']?.message).to.equal('Must contain at least one item with content.');
+      expect(errors['/data/chapters/0/sections/0/label']?.keyword).to.equal('required');
+      expect(errors['/data/chapters/0/sections/0/keywords']?.keyword).to.equal('minItems');
+      expect(errors['/data/chapters/0/sections/0/keywords']?.message).to.equal('Must contain at least 2 items with content.');
+    });
+
+    it('accepts a fully-populated nested structure', () => {
+      const { errors } = setup(deepSchema, {
+        chapters: [{ heading: 'Intro', sections: [{ label: 'Overview', keywords: ['a', 'b'] }] }],
+      });
+      expect(errors).to.deep.equal({});
+    });
+
+    it('reports only the deep violation when the outer structure is valid', () => {
+      // Everything is filled except the innermost array is one keyword short.
+      // The error must appear at the 4-deep pointer and nothing else may fire.
+      const { errors } = setup(deepSchema, {
+        chapters: [{ heading: 'Intro', sections: [{ label: 'Overview', keywords: ['solo'] }] }],
+      });
+      expect(Object.keys(errors)).to.deep.equal(['/data/chapters/0/sections/0/keywords']);
+      expect(errors['/data/chapters/0/sections/0/keywords']?.keyword).to.equal('minItems');
     });
   });
 });
