@@ -132,6 +132,7 @@ Nodes:
   kind,                    // 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'unsupported'
   pointer,                 // RFC 6901
   label,
+  description?,            // schema.description help text, when set
   required, readonly,
   value,                   // current value from document
   defaultValue,            // schema default
@@ -288,7 +289,7 @@ The full per-keyword reference:
 | `minLength` / `maxLength` | string length out of range | pointer to the value | `{ limit: <n> }` |
 | `pattern` | string fails the regex | pointer to the value | `{ pattern: '<regex source>' }` |
 | `minimum` / `maximum` | number out of range | pointer to the value | `{ limit: <n> }` |
-| `minItems` / `maxItems` | array length out of range | pointer to the value | `{ limit: <n> }` |
+| `minItems` / `maxItems` | non-empty item count out of range (blank items don't count) | pointer to the value | `{ limit: <n> }` |
 
 New keywords (or new `params` fields on existing keywords) may be added in minor releases. Existing keywords and field names are stable.
 

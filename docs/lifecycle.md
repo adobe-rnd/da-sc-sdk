@@ -96,7 +96,7 @@ engine.setField(pointer, value)
 
 - **`addItem(pointer)`** — `applyAdd` runs `ensureArray` + `buildDefault(itemDefinition)` to seed defaults for the new item, then `insertValueAt(end)`. Same `commit` pipeline after.
 - **`insertItem(pointer)`** — `applyInsert` inserts the seeded default at `pointer`'s position (shifting siblings down).
-- **`removeItem(pointer)`** — `applyRemove` splices out `pointer`'s item. Skipped if the array's `minItems` would be violated.
+- **`removeItem(pointer)`** — `applyRemove` splices out `pointer`'s item. Skipped only when the array is `required` and removal would drop it below `minItems`; an optional array can always be cleared back to empty.
 - **`moveItem(pointer, fromIndex, toIndex)`** — `applyMove` splices 1 out at `fromIndex` and splices in at `toIndex`. No-op when `fromIndex === toIndex`.
 
 **Mutation-level invariants:**
