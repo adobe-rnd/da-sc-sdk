@@ -157,7 +157,11 @@ function validateBoolean({ node, errors }) {
 }
 
 function arrayMinMessage(min) {
-  return min <= 1 ? 'Must contain at least one item.' : `Must contain at least ${min} items.`;
+  // "with content" because blank rows do not count toward the minimum — they
+  // prune away on save. Says it in author terms without naming the mechanic.
+  return min <= 1
+    ? 'Must contain at least one item with content.'
+    : `Must contain at least ${min} items with content.`;
 }
 
 function validateArray({ node, errors }) {
@@ -230,11 +234,24 @@ function validateNodeValue({ node, errors }) {
   if (!node || !node.pointer) { return; }
   // Unsupported subtrees are not rendered; values pass through unvalidated.
   if (node.kind === 'unsupported') { return; }
-  // Form-empty values count as absent — constraints (enum, pattern, etc.)
-  // do not fire. Emptiness is recursive: an array of only blank rows, or an
-  // object of only blank leaves, prunes to nothing on save, so it is treated
-  // as absent here too. `required` is checked at the parent level separately,
-  // so an empty required field is still flagged there.
+
+  // An array is "present" the moment it has any rows — even blank ones. A
+  // present array is validated so its count requirement (minItems/maxItems,
+  // counted by non-empty rows) surfaces as soon as the author adds a row; an
+  // array with no rows is absent, and its required-ness is handled at the
+  // parent. A non-array value in an array slot is still validated so the type
+  // error fires.
+  if (node.kind === 'array') {
+    const present = Array.isArray(node.value)
+      ? node.value.length > 0
+      : !isDataEmpty(node.value);
+    if (present) { validateArray({ node, errors }); }
+    return;
+  }
+
+  // Other leaves: a form-empty value counts as absent — constraints (enum,
+  // pattern, etc.) do not fire. `required` is checked at the parent level
+  // separately, so an empty required field is still flagged there.
   if (isDataEmpty(node.value)) { return; }
 
   if (node.kind === 'string') {
@@ -243,8 +260,6 @@ function validateNodeValue({ node, errors }) {
     validateNumber({ node, errors });
   } else if (node.kind === 'boolean') {
     validateBoolean({ node, errors });
-  } else if (node.kind === 'array') {
-    validateArray({ node, errors });
   }
 }
 
@@ -253,15 +268,12 @@ function traverse(node, errors) {
   validateNodeValue({ node, errors });
   emitRequiredForChildren({ node, errors });
   if (Array.isArray(node.children)) { node.children.forEach((c) => traverse(c, errors)); }
-  // Skip recursively-empty array rows: a blank row prunes to nothing on save,
-  // so validating its interior (nested `required`, patterns, etc.) would flag
-  // content that will never be persisted. The moment a row carries any value
-  // it is validated normally.
-  if (Array.isArray(node.items)) {
-    node.items.forEach((c) => {
-      if (!isDataEmpty(c.value)) { traverse(c, errors); }
-    });
-  }
+  // Descend into every existing array row — even a blank one. A row the author
+  // added is a real item: its required fields must validate (so the author
+  // fills it or removes it), the same as any object. It still does not count
+  // toward minItems until it has content, and it prunes away on save if left
+  // blank.
+  if (Array.isArray(node.items)) { node.items.forEach((c) => traverse(c, errors)); }
 }
 
 export function validateDocument({ document, model }) {

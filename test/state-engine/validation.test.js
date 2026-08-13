@@ -108,7 +108,7 @@ describe('validateDocument', () => {
         },
         { items: [] },
       );
-      expect(errors['/data/items']?.message).to.equal('Must contain at least one item.');
+      expect(errors['/data/items']?.message).to.equal('Must contain at least one item with content.');
     });
 
     it('reflects minItems in the required message for an empty array', () => {
@@ -120,7 +120,7 @@ describe('validateDocument', () => {
         },
         { items: [] },
       );
-      expect(errors['/data/items']?.message).to.equal('Must contain at least 3 items.');
+      expect(errors['/data/items']?.message).to.equal('Must contain at least 3 items with content.');
     });
 
     it('flags a required-field violation inside an array-root item at the field pointer', () => {
@@ -174,7 +174,7 @@ describe('validateDocument', () => {
         { tags: [{ name: '' }] },
       );
       expect(errors['/data/tags']?.keyword).to.equal('required');
-      expect(errors['/data/tags']?.message).to.equal('Must contain at least one item.');
+      expect(errors['/data/tags']?.message).to.equal('Must contain at least one item with content.');
     });
   });
 
@@ -369,7 +369,7 @@ describe('validateDocument', () => {
         keyword: 'minItems',
         instancePath: '/data/items',
         params: { limit: 2 },
-        message: 'Must contain at least 2 items.',
+        message: 'Must contain at least 2 items with content.',
       });
     });
 
@@ -417,12 +417,14 @@ describe('validateDocument', () => {
         { items: [{ name: 'a' }, { name: '' }, { name: '' }] },
       );
       expect(errors['/data/items']?.keyword).to.equal('minItems');
-      expect(errors['/data/items']?.message).to.equal('Must contain at least 3 items.');
+      expect(errors['/data/items']?.message).to.equal('Must contain at least 3 items with content.');
     });
 
-    it('treats an optional array of only blank rows as absent (no minItems)', () => {
-      // Every row prunes to nothing, so the array itself would not persist — it
-      // is optional, so there is nothing to flag.
+    it('flags minItems once an optional array has rows, even blank ones', () => {
+      // A row the author added makes the array "present", so the count
+      // requirement surfaces immediately (blank rows still do not count toward
+      // it). An array with no rows at all stays absent — see the optional-empty
+      // tests below.
       const { errors } = setup(
         {
           type: 'object',
@@ -430,26 +432,28 @@ describe('validateDocument', () => {
         },
         { items: ['', '', ''] },
       );
-      expect(errors).to.deep.equal({});
+      expect(errors['/data/items']?.keyword).to.equal('minItems');
+      expect(errors['/data/items']?.message).to.equal('Must contain at least 3 items with content.');
     });
 
-    it('does not validate a blank row (its interior prunes away)', () => {
-      // A single blank object row in an optional array: nothing survives save,
-      // so the row's nested `required` must not fire and neither must minItems.
+    it('validates a blank row: its required fields fire and the count shows', () => {
+      // An added row is a real item — its required `name` must validate (fill it
+      // or remove it), and the array shows its minItems requirement at once.
       const { errors } = setup(
         {
           type: 'object',
           properties: {
             authors: {
               type: 'array',
-              minItems: 1,
+              minItems: 2,
               items: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } },
             },
           },
         },
         { authors: [{ name: '' }] },
       );
-      expect(errors).to.deep.equal({});
+      expect(errors['/data/authors']?.keyword).to.equal('minItems');
+      expect(errors['/data/authors/0/name']?.keyword).to.equal('required');
     });
 
     it('validates a row once it carries content (nested required fires)', () => {
@@ -517,7 +521,7 @@ describe('validateDocument', () => {
       // flagged as a missing required value, exactly like an empty `[]` array.
       expect(errors['/data/items']?.keyword).to.equal('required');
       expect(errors['/data/items']?.params?.missingProperty).to.equal('items');
-      expect(errors['/data/items']?.message).to.equal('Must contain at least one item.');
+      expect(errors['/data/items']?.message).to.equal('Must contain at least one item with content.');
     });
   });
 
