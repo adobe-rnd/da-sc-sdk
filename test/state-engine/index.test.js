@@ -238,7 +238,7 @@ describe('createEngine', () => {
       expect(next.document.data.items).to.deep.equal(['a', '', 'b']);
     });
 
-    it('removeItem respects minItems on a required array', async () => {
+    it('removeItem can empty a required array; validation flags the shortfall', async () => {
       const schema = {
         type: 'object',
         required: ['items'],
@@ -247,9 +247,19 @@ describe('createEngine', () => {
         },
       };
       const core = createEngine({ schema, document: { metadata: {}, data: { items: ['a', 'b'] } } });
+      // Removal is not floored: a required array at its minimum can still lose a
+      // row. The shortfall surfaces as a validation error rather than a silent
+      // no-op — the non-blocking model, and it avoids a misleading UI where some
+      // rows are deletable and others are not.
       core.removeItem('/data/items/0');
-      // unchanged: a required array must keep at least minItems rows.
-      expect(core.getState().document.data.items).to.deep.equal(['a', 'b']);
+      expect(core.getState().document.data.items).to.deep.equal(['b']);
+      expect(core.getState().validation.errors['/data/items']?.message)
+        .to.match(/at least 2 items with content/);
+      // It can be emptied entirely too, which then reads as the required array
+      // being missing — still flagged, never blocked.
+      core.removeItem('/data/items/0');
+      expect(core.getState().document.data.items).to.deep.equal([]);
+      expect(core.getState().validation.errors['/data/items']).to.exist;
     });
 
     it('removeItem can clear an optional array below minItems', async () => {

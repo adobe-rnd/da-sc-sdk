@@ -141,13 +141,14 @@ function canRemove(definition, node) {
   if (!definition || definition.kind !== 'array') { return false; }
   if (!node || node.kind !== 'array') { return false; }
   if (definition.readonly) { return false; }
-  const count = node.items?.length ?? 0;
-  // Only a required array holds a floor at minItems — those rows must stay. An
-  // optional array can always be cleared back to empty (it prunes to absent,
-  // which is valid), so blocking removal there would strand rows the author
-  // added and then wanted to drop.
-  const floor = definition.required ? (definition.minItems ?? 0) : 0;
-  return count > floor;
+  // Removal is never floored: an author may always delete a row. Dropping below
+  // minItems — or emptying a required array — is surfaced as a validation error,
+  // not prevented, consistent with the engine's non-blocking model (we flag, we
+  // don't block). Flooring here would also have to be per-item to let blank rows
+  // go, which makes some rows deletable and others not — misleading. An optional
+  // array prunes to absent when emptied (valid); a required one reads as missing
+  // and is flagged.
+  return (node.items?.length ?? 0) > 0;
 }
 
 function canReorder(definition, node) {
