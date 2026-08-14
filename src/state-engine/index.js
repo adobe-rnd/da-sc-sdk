@@ -133,6 +133,8 @@ function canAdd(definition, node) {
   if (!definition || definition.kind !== 'array') { return false; }
   if (!node || node.kind !== 'array') { return false; }
   if (definition.readonly) { return false; }
+  // Cap on raw row count, not non-empty: maxItems bounds how many rows exist.
+  // A non-empty cap would let blank rows be added without limit — don't.
   const count = node.items?.length ?? 0;
   return definition.maxItems === undefined || count < definition.maxItems;
 }
@@ -141,13 +143,9 @@ function canRemove(definition, node) {
   if (!definition || definition.kind !== 'array') { return false; }
   if (!node || node.kind !== 'array') { return false; }
   if (definition.readonly) { return false; }
-  // Removal is never floored: an author may always delete a row. Dropping below
-  // minItems — or emptying a required array — is surfaced as a validation error,
-  // not prevented, consistent with the engine's non-blocking model (we flag, we
-  // don't block). Flooring here would also have to be per-item to let blank rows
-  // go, which makes some rows deletable and others not — misleading. An optional
-  // array prunes to absent when emptied (valid); a required one reads as missing
-  // and is flagged.
+  // No minItems floor: removal is always allowed and a below-min result is
+  // flagged by validation, not blocked. Do not re-add a floor — it would have to
+  // be per-item to let blank rows go, making only some rows deletable.
   return (node.items?.length ?? 0) > 0;
 }
 

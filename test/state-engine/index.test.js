@@ -247,10 +247,6 @@ describe('createEngine', () => {
         },
       };
       const core = createEngine({ schema, document: { metadata: {}, data: { items: ['a', 'b'] } } });
-      // Removal is not floored: a required array at its minimum can still lose a
-      // row. The shortfall surfaces as a validation error rather than a silent
-      // no-op — the non-blocking model, and it avoids a misleading UI where some
-      // rows are deletable and others are not.
       core.removeItem('/data/items/0');
       expect(core.getState().document.data.items).to.deep.equal(['b']);
       expect(core.getState().validation.errors['/data/items']?.message)

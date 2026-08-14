@@ -93,16 +93,13 @@ function validateString({ node, errors }) {
     return;
   }
   if (validation.pattern !== undefined) {
-    // pattern is guaranteed valid here — the compiler drops unparseable
-    // patterns and pushes them to schemaIssues at compile time.
+    // pattern is compiler-validated (unparseable ones become schemaIssues).
     const regex = new RegExp(validation.pattern);
     if (!regex.test(value)) {
       pushError(errors, node.pointer, {
         keyword: 'pattern',
         params: { pattern: validation.pattern },
         // Include the pattern itself — the only field-specific detail we have.
-        // A schema-authored message would be friendlier, but that is a separate
-        // feature; showing the rule beats "the required pattern".
         message: `Must match the pattern "${validation.pattern}".`,
       });
     }
@@ -157,8 +154,7 @@ function validateBoolean({ node, errors }) {
 }
 
 function arrayMinMessage(min) {
-  // "with content" because blank rows do not count toward the minimum — they
-  // prune away on save. Says it in author terms without naming the mechanic.
+  // "with content": blank rows do not count — they prune on save.
   return min <= 1
     ? 'Must contain at least one item with content.'
     : `Must contain at least ${min} items with content.`;
@@ -174,14 +170,10 @@ function validateArray({ node, errors }) {
     });
     return;
   }
-  // Count only non-empty entries: empty items are stripped on save, so the
-  // saved document would not actually contain them. Validating raw length lets
-  // e.g. three blank rows satisfy minItems:3 even though none would persist.
-  // Emptiness is RECURSIVE here — a row like `{ name: '' }` prunes to nothing,
-  // so it must not count toward the minimum even though it has a key.
+  // Count only non-empty entries — blank items prune on save. Emptiness is
+  // recursive: `{ name: '' }` prunes to nothing and must not count.
   const count = value.filter((item) => !isDataEmpty(item)).length;
-  // A required array needs at least one non-empty item even without minItems —
-  // otherwise a row full of blanks (which strips to nothing) looks satisfied.
+  // A required array needs at least one non-empty item even without minItems.
   const min = node.required ? Math.max(node.minItems ?? 0, 1) : node.minItems;
   if (min !== undefined && count < min) {
     pushError(errors, node.pointer, {
@@ -200,15 +192,12 @@ function validateArray({ node, errors }) {
   }
 }
 
-// A required object is a section and a required array needs items — "field"
-// only fits a single input. Word the message to the control the author sees.
-// An empty array never reaches the minItems check (it short-circuits as
-// absent), so surface its minItems here when it asks for more than one.
+// Word the required message to the control kind: object = section, array =
+// item count (surfaced here since an empty array short-circuits as absent).
 function requiredMessage(child) {
   if (child.kind === 'object') { return 'This section is required.'; }
   if (child.kind === 'array') {
-    // A required array needs at least one non-empty item (or minItems). Shares
-    // the wording used by validateArray so both paths read the same.
+    // Share validateArray's wording so both paths read the same.
     return arrayMinMessage(Math.max(child.minItems ?? 0, 1));
   }
   return 'This field is required.';
@@ -217,9 +206,8 @@ function requiredMessage(child) {
 function emitRequiredForChildren({ node, errors }) {
   if (node.kind !== 'object' || !Array.isArray(node.children)) { return; }
   for (const child of node.children) {
-    // Presence is RECURSIVE: a required object/array whose only content is
-    // empty leaves (e.g. `{ title: '' }`) prunes away entirely on save, so it
-    // must be flagged as missing even though it is a shallowly-populated value.
+    // Presence is recursive: a required container of only-empty leaves (e.g.
+    // `{ title: '' }`) prunes to nothing on save, so flag it as missing.
     if (child.required && isDataEmpty(child.value)) {
       pushError(errors, child.pointer, {
         keyword: 'required',
@@ -235,12 +223,8 @@ function validateNodeValue({ node, errors }) {
   // Unsupported subtrees are not rendered; values pass through unvalidated.
   if (node.kind === 'unsupported') { return; }
 
-  // An array is "present" the moment it has any rows — even blank ones. A
-  // present array is validated so its count requirement (minItems/maxItems,
-  // counted by non-empty rows) surfaces as soon as the author adds a row; an
-  // array with no rows is absent, and its required-ness is handled at the
-  // parent. A non-array value in an array slot is still validated so the type
-  // error fires.
+  // An array is present once it has any rows (even blank), so its count
+  // requirement surfaces; an empty array is absent, handled at the parent.
   if (node.kind === 'array') {
     const present = Array.isArray(node.value)
       ? node.value.length > 0
@@ -249,9 +233,8 @@ function validateNodeValue({ node, errors }) {
     return;
   }
 
-  // Other leaves: a form-empty value counts as absent — constraints (enum,
-  // pattern, etc.) do not fire. `required` is checked at the parent level
-  // separately, so an empty required field is still flagged there.
+  // An empty leaf is absent — value constraints do not fire. required is
+  // enforced at the parent, so an empty required field is still flagged.
   if (isDataEmpty(node.value)) { return; }
 
   if (node.kind === 'string') {
@@ -268,11 +251,8 @@ function traverse(node, errors) {
   validateNodeValue({ node, errors });
   emitRequiredForChildren({ node, errors });
   if (Array.isArray(node.children)) { node.children.forEach((c) => traverse(c, errors)); }
-  // Descend into every existing array row — even a blank one. A row the author
-  // added is a real item: its required fields must validate (so the author
-  // fills it or removes it), the same as any object. It still does not count
-  // toward minItems until it has content, and it prunes away on save if left
-  // blank.
+  // Descend into every row, even blank ones: an added row's required fields
+  // must validate (fill or remove it). Blank rows still don't count toward min.
   if (Array.isArray(node.items)) { node.items.forEach((c) => traverse(c, errors)); }
 }
 
