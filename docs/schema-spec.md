@@ -184,9 +184,10 @@ These keywords describe presentation. They do not constrain the value.
 | Keyword     | Type      | Applies to | Effect |
 | ----------- | --------- | ---------- | ------ |
 | `title`     | string    | any        | Label shown above the input. **Required on every node** (rule R4). |
+| `description` | string  | any        | Help text shown with the field (above the input). Does not constrain the value. |
 | `default`   | matches type | any     | Pre-fills the field when the document has no value. |
 | `readOnly`  | boolean   | any        | Disables the input. The value remains visible. |
-| `required`  | string[]  | object     | Names properties whose absence shows `"This field is required."` |
+| `required`  | string[]  | object     | Names properties that must hold a non-empty value. The message depends on the control: `"This field is required."` (field), `"This section is required."` (object), or the item count (array). |
 
 `required` is declared on the parent `object`, not on the child property.
 
@@ -314,9 +315,9 @@ Any keyword, type, or construct not listed in §2–5 is ignored by the SDK.
 
 The SDK treats unfilled values as absent.
 
-- An empty string (`""`), a whitespace-only string, an empty array (`[]`), and an empty object (`{}` or one whose fields are all empty) are considered absent.
+- An empty string (`""`), a whitespace-only string, an empty array (`[]` or one whose items are all empty), and an empty object (`{}` or one whose fields are all empty) are considered absent.
 - Constraints (`enum`, `pattern`, `minLength`, etc.) are not enforced on absent optional fields.
-- A `required` field that is absent produces the message `"This field is required."`
+- A `required` value that is absent is flagged. The message matches the control: `"This field is required."` for a field, `"This section is required."` for an object, and the item count for an array.
 - Absent values are stripped from the saved document.
 
 For the schema

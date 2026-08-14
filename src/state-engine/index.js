@@ -14,6 +14,7 @@ import { compileSchema } from './schema.js';
 import { buildModel, nodeAt } from './model.js';
 import { validateDocument } from './validation.js';
 import { definitionAt, getParentPointer } from './pointer.js';
+import { isDataEmpty } from './empty.js';
 import {
   addItem as applyAdd,
   insertItem as applyInsert,
@@ -39,21 +40,10 @@ function parseDocument(document) {
   return next;
 }
 
-// Mirrors prune() in html/utils.js: a value is "empty" iff it would be
-// stripped from the saved HTML. Keep the two definitions symmetric — defaults
-// materialize exactly when the loaded document, after applying the same
-// stripping rules, has no surviving content. If html/utils.js changes what it
-// strips, this must change too.
-export function isDataEmpty(value) {
-  if (value === null || value === undefined || value === '') { return true; }
-  if (typeof value === 'string') { return value.trim() === ''; }
-  if (Array.isArray(value)) { return value.length === 0 || value.every(isDataEmpty); }
-  if (typeof value === 'object') {
-    const entries = Object.values(value);
-    return entries.length === 0 || entries.every(isDataEmpty);
-  }
-  return false;
-}
+// The canonical "form-empty" predicate lives in ./empty.js so validation,
+// defaults, and save all decide presence the same way. Re-exported here to
+// keep the existing import surface (and the isDataEmpty ↔ prune symmetry test).
+export { isDataEmpty };
 
 // Walk the compiled definition tree and produce a partial document containing
 // only keys that carry a real schema default (recursively). Fields without
@@ -143,6 +133,8 @@ function canAdd(definition, node) {
   if (!definition || definition.kind !== 'array') { return false; }
   if (!node || node.kind !== 'array') { return false; }
   if (definition.readonly) { return false; }
+  // Cap on raw row count, not non-empty: maxItems bounds how many rows exist.
+  // A non-empty cap would let blank rows be added without limit — don't.
   const count = node.items?.length ?? 0;
   return definition.maxItems === undefined || count < definition.maxItems;
 }
@@ -151,8 +143,10 @@ function canRemove(definition, node) {
   if (!definition || definition.kind !== 'array') { return false; }
   if (!node || node.kind !== 'array') { return false; }
   if (definition.readonly) { return false; }
-  const count = node.items?.length ?? 0;
-  return count > (definition.minItems ?? 0);
+  // No minItems floor: removal is always allowed and a below-min result is
+  // flagged by validation, not blocked. Do not re-add a floor — it would have to
+  // be per-item to let blank rows go, making only some rows deletable.
+  return (node.items?.length ?? 0) > 0;
 }
 
 function canReorder(definition, node) {

@@ -45,6 +45,12 @@ describe('buildModel', () => {
     expect(model.root.children[1].items[1].pointer).to.equal('/data/tags/1');
   });
 
+  it('carries description onto the built node', () => {
+    const def = objectDef([stringDef('slug', { description: 'Lowercase and hyphens.' })]);
+    const model = buildModel({ definition: def, document: { data: {} } });
+    expect(model.root.children[0].description).to.equal('Lowercase and hyphens.');
+  });
+
   it('populates byPointer for every node', () => {
     const def = objectDef([
       stringDef('name'),

@@ -95,7 +95,7 @@ Walks the resolved schema. At each node:
    - `type` string in `SUPPORTED_TYPES` → that kind
    - Anything else (missing type, unknown type) → `kind: 'unsupported'`
 2. **Picks validation rules** via `pickValidation`. Only `minLength`, `maxLength`, `minimum`, `maximum`, `pattern` survive — everything else is silently dropped. This is intentional: the validator's contract is the docs, not the JSON Schema spec.
-3. **Builds the node** with `key`, `kind`, `label` (from `title` or key fallback), `required`, `readonly`, `defaultValue`, `validation`.
+3. **Builds the node** with `key`, `kind`, `label` (from `title` or key fallback), `description` (from `description`, when set), `required`, `readonly`, `defaultValue`, `validation`.
 4. **Recurses** for composite kinds:
    - `object` → compiles each `properties` entry into `children`. `required` flags carry through.
    - `array` → compiles `items` into a single `item` node (the *template* for array elements; the model later instantiates one node per document element).

@@ -67,6 +67,7 @@ Every node carries the same base fields, plus kind-specific extras.
   kind,                    // 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'unsupported'
   pointer,                 // RFC 6901, prefixed with '/data' (e.g. '/data/people/0/name')
   label,                   // schema.title or key fallback
+  description,             // schema.description help text, present only when set
   required,
   readonly,
   defaultValue,            // schema default, if any

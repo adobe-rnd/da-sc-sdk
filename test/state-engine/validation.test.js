@@ -14,6 +14,7 @@ import { expect } from '@esm-bundle/chai';
 import { validateDocument } from '../../src/state-engine/validation.js';
 import { compileSchema } from '../../src/state-engine/schema.js';
 import { buildModel } from '../../src/state-engine/model.js';
+import { prune } from '../../src/html/utils.js';
 
 function setup(schema, data) {
   const { definition } = compileSchema(schema);
@@ -85,20 +86,138 @@ describe('validateDocument', () => {
       expect(errors['/data/items']?.params?.missingProperty).to.equal('items');
     });
 
+    it('words the required message for the control: object is a section', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['seo'],
+          properties: { seo: { type: 'object', properties: { mt: { type: 'string' } } } },
+        },
+        { seo: {} },
+      );
+      expect(errors['/data/seo']?.keyword).to.equal('required');
+      expect(errors['/data/seo']?.message).to.equal('This section is required.');
+    });
+
+    it('words the required message for the control: array asks for an item', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['items'],
+          properties: { items: { type: 'array', items: { type: 'string' } } },
+        },
+        { items: [] },
+      );
+      expect(errors['/data/items']?.message).to.equal('Must contain at least one item with content.');
+    });
+
+    it('reflects minItems in the required message for an empty array', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['items'],
+          properties: { items: { type: 'array', minItems: 3, items: { type: 'string' } } },
+        },
+        { items: [] },
+      );
+      expect(errors['/data/items']?.message).to.equal('Must contain at least 3 items with content.');
+    });
+
     it('flags a required-field violation inside an array-root item at the field pointer', () => {
+      // The row carries content (`note`) so it survives pruning — a row of only
+      // blank leaves would be treated as absent and not validated.
       const { errors } = setup(
         {
           type: 'array',
           items: {
             type: 'object',
             required: ['name'],
-            properties: { name: { type: 'string' } },
+            properties: { name: { type: 'string' }, note: { type: 'string' } },
           },
         },
-        [{ name: '' }],
+        [{ name: '', note: 'kept' }],
       );
       expect(errors['/data/0/name']?.keyword).to.equal('required');
       expect(errors['/data/0/name']?.params?.missingProperty).to.equal('name');
+    });
+
+    // A container can be shallowly populated (has a key / a row) yet recursively
+    // empty — every leaf beneath it is blank, so `prune()` deletes it entirely
+    // on save. Presence is checked recursively so these are flagged as missing
+    // rather than silently dropping a required key from the saved document.
+    it('flags a required object whose only leaves are empty', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['seo'],
+          properties: { seo: { type: 'object', properties: { title: { type: 'string' } } } },
+        },
+        { seo: { title: '' } },
+      );
+      expect(errors['/data/seo']?.keyword).to.equal('required');
+      expect(errors['/data/seo']?.message).to.equal('This section is required.');
+    });
+
+    it('flags both the section and its required child when a required section is empty', () => {
+      // An empty required section reports at the section (it prunes away) AND at
+      // its own required child — each at its own pointer.
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['seo'],
+          properties: {
+            seo: {
+              type: 'object',
+              required: ['metaTitle'],
+              properties: { metaTitle: { type: 'string' }, metaDescription: { type: 'string' } },
+            },
+          },
+        },
+        { seo: { metaTitle: '' } },
+      );
+      expect(errors['/data/seo']?.keyword).to.equal('required');
+      expect(errors['/data/seo']?.message).to.equal('This section is required.');
+      expect(errors['/data/seo/metaTitle']?.keyword).to.equal('required');
+    });
+
+    it('validates inside a section that has content (only the missing child fires)', () => {
+      // The section is not empty (metaDescription has content), so it is not
+      // flagged as required — but the missing required metaTitle still is.
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['seo'],
+          properties: {
+            seo: {
+              type: 'object',
+              required: ['metaTitle'],
+              properties: { metaTitle: { type: 'string' }, metaDescription: { type: 'string' } },
+            },
+          },
+        },
+        { seo: { metaTitle: '', metaDescription: 'A description.' } },
+      );
+      expect(errors['/data/seo']).to.equal(undefined);
+      expect(errors['/data/seo/metaTitle']?.keyword).to.equal('required');
+    });
+
+    it('flags a required object-array whose only row is a blank object', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['tags'],
+          properties: {
+            tags: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'object', properties: { name: { type: 'string' } } },
+            },
+          },
+        },
+        { tags: [{ name: '' }] },
+      );
+      expect(errors['/data/tags']?.keyword).to.equal('required');
+      expect(errors['/data/tags']?.message).to.equal('Must contain at least one item with content.');
     });
   });
 
@@ -143,7 +262,7 @@ describe('validateDocument', () => {
           keyword: 'pattern',
           instancePath: '/data/code',
           params: { pattern: '^\\d+$' },
-          message: 'Must match the required pattern.',
+          message: 'Must match the pattern "^\\d+$".',
         },
       });
     });
@@ -265,6 +384,22 @@ describe('validateDocument', () => {
   });
 
   describe('array', () => {
+    it('rejects a non-array value with a type error', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: { items: { type: 'array', items: { type: 'string' } } },
+        },
+        { items: 'not-an-array' },
+      );
+      expect(errors['/data/items']).to.deep.equal({
+        keyword: 'type',
+        instancePath: '/data/items',
+        params: { type: 'array' },
+        message: 'Must be an array.',
+      });
+    });
+
     it('rejects below minItems when the array has content', () => {
       const { errors } = setup(
         {
@@ -277,7 +412,7 @@ describe('validateDocument', () => {
         keyword: 'minItems',
         instancePath: '/data/items',
         params: { limit: 2 },
-        message: 'Must contain at least 2 items.',
+        message: 'Must contain at least 2 items with content.',
       });
     });
 
@@ -295,6 +430,155 @@ describe('validateDocument', () => {
         params: { limit: 2 },
         message: 'Must contain at most 2 items.',
       });
+    });
+
+    it('counts only non-empty items for maxItems (blank rows do not count)', () => {
+      // Raw length is 4, but only two rows have content and the blanks prune
+      // away on save — so maxItems:2 is satisfied. (If maxItems counted raw
+      // length instead of content, this would wrongly fail.)
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: { items: { type: 'array', maxItems: 2, items: { type: 'string' } } },
+        },
+        { items: ['a', '', '', 'b'] },
+      );
+      expect(errors).to.deep.equal({});
+    });
+
+    it('counts only items for minItems (blank rows do not count toward the minimum)', () => {
+      // One real item keeps the array present; the two blank rows must not push
+      // it to the minimum, since they prune away on save.
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: { items: { type: 'array', minItems: 3, items: { type: 'string' } } },
+        },
+        { items: ['a', '', ''] },
+      );
+      expect(errors['/data/items']?.keyword).to.equal('minItems');
+    });
+
+    it('counts object rows recursively: blank-object rows do not satisfy minItems', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: {
+            items: {
+              type: 'array',
+              minItems: 3,
+              items: { type: 'object', properties: { name: { type: 'string' } } },
+            },
+          },
+        },
+        { items: [{ name: 'a' }, { name: '' }, { name: '' }] },
+      );
+      expect(errors['/data/items']?.keyword).to.equal('minItems');
+      expect(errors['/data/items']?.message).to.equal('Must contain at least 3 items with content.');
+    });
+
+    it('flags minItems once an optional array has rows, even blank ones', () => {
+      // A row the author added makes the array "present", so the count
+      // requirement surfaces immediately (blank rows still do not count toward
+      // it). An array with no rows at all stays absent — see the optional-empty
+      // tests below.
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: { items: { type: 'array', minItems: 3, items: { type: 'string' } } },
+        },
+        { items: ['', '', ''] },
+      );
+      expect(errors['/data/items']?.keyword).to.equal('minItems');
+      expect(errors['/data/items']?.message).to.equal('Must contain at least 3 items with content.');
+    });
+
+    it('validates a blank row: its required fields fire and the count shows', () => {
+      // An added row is a real item — its required `name` must validate (fill it
+      // or remove it), and the array shows its minItems requirement at once.
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: {
+            authors: {
+              type: 'array',
+              minItems: 2,
+              items: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } },
+            },
+          },
+        },
+        { authors: [{ name: '' }] },
+      );
+      expect(errors['/data/authors']?.keyword).to.equal('minItems');
+      expect(errors['/data/authors/0/name']?.keyword).to.equal('required');
+    });
+
+    it('validates a row once it carries content (nested required fires)', () => {
+      // `email` gives the row content, so it survives save — now the missing
+      // required `name` is a real problem and is flagged at its own pointer.
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: {
+            authors: {
+              type: 'array',
+              minItems: 1,
+              items: {
+                type: 'object',
+                required: ['name'],
+                properties: { name: { type: 'string' }, email: { type: 'string' } },
+              },
+            },
+          },
+        },
+        { authors: [{ name: '', email: 'a@b.co' }] },
+      );
+      expect(errors['/data/authors/0/name']?.keyword).to.equal('required');
+      expect(errors['/data/authors']).to.equal(undefined);
+    });
+
+    it('accepts object rows that carry content toward minItems', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: {
+            items: {
+              type: 'array',
+              minItems: 2,
+              items: { type: 'object', properties: { name: { type: 'string' } } },
+            },
+          },
+        },
+        { items: [{ name: 'a' }, { name: '' }, { name: 'b' }] },
+      );
+      expect(errors).to.deep.equal({});
+    });
+
+    it('accepts when enough items are non-empty, ignoring blank rows', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          properties: { items: { type: 'array', minItems: 2, items: { type: 'string' } } },
+        },
+        { items: ['a', '', 'b'] },
+      );
+      expect(errors).to.deep.equal({});
+    });
+
+    it('flags a required array whose only rows are empty (no minItems)', () => {
+      const { errors } = setup(
+        {
+          type: 'object',
+          required: ['items'],
+          properties: { items: { type: 'array', items: { type: 'string' } } },
+        },
+        { items: [''] },
+      );
+      // A row of blanks prunes to nothing, so the array is recursively empty:
+      // flagged as a missing required value, exactly like an empty `[]` array.
+      expect(errors['/data/items']?.keyword).to.equal('required');
+      expect(errors['/data/items']?.params?.missingProperty).to.equal('items');
+      expect(errors['/data/items']?.message).to.equal('Must contain at least one item with content.');
     });
   });
 
@@ -344,5 +628,150 @@ describe('validateDocument', () => {
       { choice: 'anything' },
     );
     expect(errors).to.deep.equal({});
+  });
+
+  it('ignores unsupported constraint keywords (multipleOf, const, uniqueItems, exclusiveMinimum, numeric enum)', () => {
+    // Only the keyword set in schema-spec.md is enforced; the compiler drops the
+    // rest, so data that violates them is still valid. All values are non-empty
+    // so they are actually validated for the supported keywords (type), and the
+    // unsupported constraints simply do not fire.
+    const { errors } = setup(
+      {
+        type: 'object',
+        properties: {
+          n: { type: 'number', multipleOf: 5, exclusiveMinimum: 0 },
+          s: { type: 'string', const: 'X' },
+          tags: { type: 'array', uniqueItems: true, items: { type: 'string' } },
+          e: { type: 'number', enum: [1, 2] },
+        },
+      },
+      { n: 7, s: 'Y', tags: ['x', 'x'], e: 99 },
+    );
+    expect(errors).to.deep.equal({});
+  });
+
+  // The guarantee: when validateDocument reports no errors, the SAVED document
+  // (prune of the same data) still satisfies the schema's structural keywords.
+  // This is NOT circular — prune() is independent of validateDocument, and each
+  // case asserts the pruned OUTPUT against the schema keyword directly (key
+  // present, array length within bounds). It locks the shared-emptiness
+  // invariant: what validation accepts is exactly what survives save.
+  describe('save conformance: SDK-valid data stays schema-valid after prune', () => {
+    function validAndPruned(schema, data) {
+      const { definition } = compileSchema(schema);
+      const document = { metadata: {}, data };
+      const model = buildModel({ definition, document });
+      const { errors } = validateDocument({ document, model });
+      return { errors, pruned: prune(data) };
+    }
+
+    it('keeps a required object key present after prune', () => {
+      const schema = {
+        type: 'object',
+        required: ['seo'],
+        properties: { seo: { type: 'object', properties: { title: { type: 'string' } } } },
+      };
+      const { errors, pruned } = validAndPruned(schema, { seo: { title: 'Hello' } });
+      expect(errors).to.deep.equal({});
+      expect(pruned).to.have.property('seo');
+      expect(pruned.seo).to.deep.equal({ title: 'Hello' });
+    });
+
+    it('leaves an object-array at or above minItems after blank rows prune away', () => {
+      const schema = {
+        type: 'object',
+        required: ['tags'],
+        properties: {
+          tags: {
+            type: 'array',
+            minItems: 2,
+            items: { type: 'object', properties: { name: { type: 'string' } } },
+          },
+        },
+      };
+      // Two filled rows plus a blank one the author left behind.
+      const { errors, pruned } = validAndPruned(schema, {
+        tags: [{ name: 'a' }, { name: '' }, { name: 'b' }],
+      });
+      expect(errors).to.deep.equal({});
+      expect(pruned.tags.length).to.be.at.least(2);
+    });
+
+    it('leaves an array at or below maxItems after prune', () => {
+      const schema = {
+        type: 'object',
+        properties: { tags: { type: 'array', maxItems: 2, items: { type: 'string' } } },
+      };
+      const { errors, pruned } = validAndPruned(schema, { tags: ['a', '', 'b'] });
+      expect(errors).to.deep.equal({});
+      expect(pruned.tags.length).to.be.at.most(2);
+    });
+  });
+
+  // The recursion (emptiness, presence, counting) must hold at any depth, not
+  // just one level. This structure nests array → object → array → object → array
+  // of strings, so errors have to be found and reported at 4-deep pointers.
+  describe('deep nesting (array of objects containing a nested array of objects)', () => {
+    const deepSchema = {
+      type: 'object',
+      properties: {
+        chapters: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            required: ['heading', 'sections'],
+            properties: {
+              heading: { type: 'string', minLength: 2 },
+              sections: {
+                type: 'array',
+                minItems: 1,
+                items: {
+                  type: 'object',
+                  required: ['label'],
+                  properties: {
+                    label: { type: 'string' },
+                    keywords: { type: 'array', minItems: 2, items: { type: 'string' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    it('surfaces a violation at every level of a blank nested structure', () => {
+      const { errors } = setup(deepSchema, {
+        chapters: [{ heading: '', sections: [{ label: '', keywords: [''] }] }],
+      });
+      // Optional array present-but-short -> minItems; required array recursively
+      // empty -> required (both worded "items with content"); required scalars ->
+      // "This field is required." — each at its own deep pointer.
+      expect(errors['/data/chapters']?.keyword).to.equal('minItems');
+      expect(errors['/data/chapters/0/heading']?.keyword).to.equal('required');
+      expect(errors['/data/chapters/0/sections']?.keyword).to.equal('required');
+      expect(errors['/data/chapters/0/sections']?.message).to.equal('Must contain at least one item with content.');
+      expect(errors['/data/chapters/0/sections/0/label']?.keyword).to.equal('required');
+      expect(errors['/data/chapters/0/sections/0/keywords']?.keyword).to.equal('minItems');
+      expect(errors['/data/chapters/0/sections/0/keywords']?.message).to.equal('Must contain at least 2 items with content.');
+    });
+
+    it('accepts a fully-populated nested structure', () => {
+      const { errors } = setup(deepSchema, {
+        chapters: [{ heading: 'Intro', sections: [{ label: 'Overview', keywords: ['a', 'b'] }] }],
+      });
+      expect(errors).to.deep.equal({});
+    });
+
+    it('reports only the deep violation when the outer structure is valid', () => {
+      // Everything is filled except the innermost array is one keyword short.
+      // The error must appear at the 4-deep pointer and nothing else may fire.
+      const { errors } = setup(deepSchema, {
+        chapters: [{ heading: 'Intro', sections: [{ label: 'Overview', keywords: ['solo'] }] }],
+      });
+      expect(Object.keys(errors)).to.deep.equal(['/data/chapters/0/sections/0/keywords']);
+      expect(errors['/data/chapters/0/sections/0/keywords']?.keyword).to.equal('minItems');
+    });
   });
 });

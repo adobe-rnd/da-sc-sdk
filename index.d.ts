@@ -137,6 +137,8 @@ export interface ModelNode {
   pointer: JsonPointer;
   /** schema.title or the key as fallback. */
   label: string;
+  /** schema.description — field help text; present only when the schema sets it. */
+  description?: string;
   required: boolean;
   readonly: boolean;
   defaultValue?: unknown;
