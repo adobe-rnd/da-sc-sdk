@@ -1,3 +1,10 @@
+# [0.4.0](https://github.com/adobe/da-sc-sdk/compare/v0.3.0...v0.4.0) (2026-08-14)
+
+
+### Features
+
+* **validation:** harden array & container validation, clearer messages, and description support ([#14](https://github.com/adobe/da-sc-sdk/issues/14)) ([4507060](https://github.com/adobe/da-sc-sdk/commit/45070605fcf5e055e7d45629e233b827e7a30ddf))
+
 # [0.3.0](https://github.com/adobe/da-sc-sdk/compare/v0.2.0...v0.3.0) (2026-08-05)
 
 
