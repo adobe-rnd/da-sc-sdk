@@ -55,6 +55,54 @@ function pushError(errors, instancePath, error) {
   errors[instancePath] = { instancePath, ...error };
 }
 
+// RFC 3339 shapes. date/time are floating (no offset); date-time is constrained
+// to UTC (`Z`) with zero seconds — one canonical storage form for editor and
+// script writers alike. Deliberately stricter than RFC 3339.
+const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const TIME_RE = /^(\d{2}):(\d{2})(?::(\d{2}))?$/;
+const DATE_TIME_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):00(?:\.0+)?Z$/;
+
+function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function isValidYmd(year, month, day) {
+  if (month < 1 || month > 12 || day < 1) { return false; }
+  const lengths = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day <= lengths[month - 1];
+}
+
+// Wall-clock components. Seconds allow 60 for RFC 3339 leap seconds.
+function isValidHms(hour, minute, second) {
+  return hour <= 23 && minute <= 59 && second <= 60;
+}
+
+// Returns a message when the value doesn't match its `format`, else null.
+function formatError({ format, value }) {
+  if (format === 'date') {
+    const m = DATE_RE.exec(value);
+    if (!m || !isValidYmd(+m[1], +m[2], +m[3])) {
+      return 'Must be a valid date.';
+    }
+    return null;
+  }
+  if (format === 'time') {
+    const m = TIME_RE.exec(value);
+    if (!m || !isValidHms(+m[1], +m[2], m[3] ? +m[3] : 0)) {
+      return 'Must be a valid time.';
+    }
+    return null;
+  }
+  if (format === 'date-time') {
+    const m = DATE_TIME_RE.exec(value);
+    if (!m || !isValidYmd(+m[1], +m[2], +m[3]) || !isValidHms(+m[4], +m[5], 0)) {
+      return 'Must be a valid date and time.';
+    }
+    return null;
+  }
+  return null;
+}
+
 function validateString({ node, errors }) {
   const { value } = node;
   if (typeof value !== 'string') {
@@ -73,6 +121,18 @@ function validateString({ node, errors }) {
       message: 'Must be one of the allowed options.',
     });
     return;
+  }
+
+  if (node.format !== undefined) {
+    const message = formatError({ format: node.format, value });
+    if (message) {
+      pushError(errors, node.pointer, {
+        keyword: 'format',
+        params: { format: node.format },
+        message,
+      });
+      return;
+    }
   }
 
   const { validation = {} } = node;
