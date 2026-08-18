@@ -106,6 +106,34 @@ describe('compileSchema', () => {
       expect(swatch.semanticType).to.equal(undefined);
     });
 
+    ['date', 'date-time', 'time'].forEach((format) => {
+      it(`captures format "${format}" on a string`, () => {
+        const { definition } = compileSchema({
+          type: 'object',
+          properties: { when: { type: 'string', format } },
+        });
+        const when = definition.children[0];
+        expect(when.kind).to.equal('string');
+        expect(when.format).to.equal(format);
+      });
+    });
+
+    it('drops an unsupported format value', () => {
+      const { definition } = compileSchema({
+        type: 'object',
+        properties: { email: { type: 'string', format: 'email' } },
+      });
+      expect(definition.children[0].format).to.equal(undefined);
+    });
+
+    it('ignores format on a non-string type', () => {
+      const { definition } = compileSchema({
+        type: 'object',
+        properties: { count: { type: 'number', format: 'date' } },
+      });
+      expect(definition.children[0].format).to.equal(undefined);
+    });
+
     it('marks a property without an explicit type as unsupported', () => {
       const { definition, editable } = compileSchema({
         type: 'object',

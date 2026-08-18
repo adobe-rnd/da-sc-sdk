@@ -227,6 +227,11 @@ const SEMANTIC_TYPES = new Map([
   ['long-text', 'string'],
 ]);
 
+// Native JSON Schema string `format` values we surface to the UI as date/time
+// widgets. Standard RFC 3339 keywords — no proprietary hint needed. Carried onto
+// the node only when the field is a string; any other format value is dropped.
+const DATE_FORMATS = new Set(['date', 'date-time', 'time']);
+
 function unsupportedKind({ reason, feature, schemaPath = '/', variants = 0, details = null }) {
   return {
     kind: 'unsupported',
@@ -459,6 +464,12 @@ function compileNode({
   // values or type mismatches are dropped. `enum` takes precedence above.
   if (SEMANTIC_TYPES.get(schema?.['x-semantic-type']) === kind) {
     return { ...base, semanticType: schema['x-semantic-type'] };
+  }
+
+  // Native RFC 3339 date/time hint. Only applies to strings; drives the widget
+  // kind and the value-shape check in validation.js.
+  if (kind === 'string' && DATE_FORMATS.has(schema?.format)) {
+    return { ...base, format: schema.format };
   }
 
   return base;
