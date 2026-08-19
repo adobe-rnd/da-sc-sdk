@@ -238,6 +238,7 @@ These keywords restrict the value. Validation reports an error when violated.
 | `minLength`          | int    | string           |
 | `maxLength`          | int    | string           |
 | `pattern`            | string | string (ECMA regex) |
+| `format`             | string | string (`date` / `time` / `date-time`) |
 | `minimum`            | number | number, integer  |
 | `maximum`            | number | number, integer  |
 | `minItems`           | int    | array            |
@@ -266,6 +267,47 @@ These keywords restrict the value. Validation reports an error when violated.
   "pattern": "^[a-z0-9-]+$"
 }
 ```
+
+### Date and time (`format`)
+
+`format` on a `string` declares the value as a date, time, or timestamp. When it
+is present the field renders as the matching `date` / `time` / `date-time`
+control, and the stored value is constrained to a single canonical shape.
+
+| `format`    | Kind                                | Stored value              | Example                  |
+| ----------- | ----------------------------------- | ------------------------- | ------------------------ |
+| `date`      | Floating calendar date              | `YYYY-MM-DD`              | `2026-08-14`             |
+| `time`      | Floating wall-clock time (24-hour)  | `HH:MM` or `HH:MM:SS`     | `09:30`                  |
+| `date-time` | Absolute instant, in UTC            | `YYYY-MM-DDTHH:MM:00Z`    | `2026-08-14T13:00:00Z`   |
+
+- Valid only on `string`. On any other type it has no effect.
+- If `enum` is also present, `enum` applies and `format` has no effect.
+- **`date` and `time` are floating** — they carry no time zone and mean the same
+  everywhere (a publish date, store opening hours).
+- **`date-time` is an absolute instant, stored in UTC** (trailing `Z`) at minute
+  precision with zero seconds — exactly `YYYY-MM-DDTHH:MM:00Z`. A single
+  canonical form guarantees that any two writers produce identical, comparable
+  values.
+
+The value is validated for both shape and real calendar/clock validity:
+
+| `format`    | Accepts                     | Rejects                                            | Message                        |
+| ----------- | --------------------------- | -------------------------------------------------- | ------------------------------ |
+| `date`      | a real `YYYY-MM-DD` date    | `2026-02-30`, `08/14/2026`                         | `Must be a valid date.`        |
+| `time`      | a real 24-hour time         | `24:00`, `9:5`                                     | `Must be a valid time.`        |
+| `date-time` | UTC `…:00Z`, zero seconds   | an offset (`+02:00`), non-zero seconds, missing `Z` | `Must be a valid date and time.` |
+
+> `date-time` is deliberately **stricter than RFC 3339**: only UTC `Z` with zero
+> seconds is accepted, so every writer produces one identical value.
+
+```json
+{ "type": "string", "title": "Publish date", "format": "date" }
+{ "type": "string", "title": "Opening time",  "format": "time" }
+{ "type": "string", "title": "Event start",   "format": "date-time" }
+```
+
+An empty value is absent (§7): an optional date/time field may be left blank, and
+`format` is not enforced on an absent value.
 
 ---
 
@@ -436,6 +478,16 @@ A schema exercising every supported keyword, including reusable shapes that refe
       "title": "Score",
       "minimum": 0,
       "maximum": 100
+    },
+    "publishDate": {
+      "type": "string",
+      "title": "Publish date",
+      "format": "date"
+    },
+    "publishedAt": {
+      "type": "string",
+      "title": "Published at",
+      "format": "date-time"
     },
     "archived": {
       "type": "boolean",

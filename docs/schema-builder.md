@@ -130,6 +130,9 @@ What `compileNode` produces. This is the shape `buildModel` expects.
   // primitive with enum:
   enumValues:  [...],
 
+  // string with date/time format:
+  format:      '…',        // 'date' | 'time' | 'date-time'
+
   // unsupported:
   unsupported: { reason, feature, compositionKeyword, variants, schemaPath, details },
 }

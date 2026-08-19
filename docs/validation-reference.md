@@ -119,6 +119,9 @@ present (§2.3).
 | `maxLength` | string | `Must be at most N characters.` |
 | `pattern` | string | `Must match the pattern "…".` |
 | `enum` | string | `Must be one of the allowed options.` |
+| `format` (date) | string | `Must be a valid date.` |
+| `format` (time) | string | `Must be a valid time.` |
+| `format` (date-time) | string | `Must be a valid date and time.` |
 | `minimum` | number, integer | `Must be greater than or equal to N.` |
 | `maximum` | number, integer | `Must be less than or equal to N.` |
 
@@ -152,6 +155,42 @@ present (§2.3).
 
 `0` and `false` are real values, not empty — a `required` number field is
 satisfied by `0`, a `required` boolean by `false`.
+
+### Date and time (`format`)
+
+`format` (`date` / `time` / `date-time`) validates the value's shape *and* its
+real calendar/clock validity. `date-time` is constrained to canonical UTC — a
+trailing `Z`, zero seconds — so every writer produces one identical value.
+
+**Schema**
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "day":   { "type": "string", "format": "date" },
+    "at":    { "type": "string", "format": "time" },
+    "start": { "type": "string", "format": "date-time" }
+  }
+}
+```
+
+**Documents and results**
+
+```text
+{ "day": "2026-08-14" }                  → valid
+{ "day": "2026-02-30" }                  → /data/day    Must be a valid date.
+{ "day": "08/14/2026" }                  → /data/day    Must be a valid date.
+{ "at": "09:30" }                        → valid
+{ "at": "24:00" }                        → /data/at     Must be a valid time.
+{ "start": "2026-08-14T13:00:00Z" }      → valid
+{ "start": "2026-08-14T13:00:00.000Z" }  → valid        (millisecond zeros allowed)
+{ "start": "2026-08-14T13:00:00+02:00" } → /data/start  Must be a valid date and time.  (offset — not UTC)
+{ "start": "2026-08-14T13:00:30Z" }      → /data/start  Must be a valid date and time.  (non-zero seconds)
+{ "start": "" }                          → valid        (empty optional — constraint suppressed)
+```
+
+The error carries `keyword: "format"` and `params: { format }`.
 
 ---
 
@@ -362,9 +401,11 @@ Only the keywords in `schema-spec.md` §2–5 are validated. Any other constrain
 keyword is **silently ignored** — the SDK does not enforce it, and data that
 violates it will still be reported valid:
 
-`multipleOf`, `const`, `format` (as an assertion), `uniqueItems`,
-`exclusiveMinimum`, `exclusiveMaximum`, `enum` on non-string types, and anything
-else outside §2–5.
+`multipleOf`, `const`, `uniqueItems`, `exclusiveMinimum`, `exclusiveMaximum`,
+`enum` on non-string types, `format` values other than `date` / `time` /
+`date-time` (e.g. `email`, `uri`, `uuid`), and anything else outside §2–5.
+
+(`format: date | time | date-time` **is** validated — see §3.)
 
 The save guarantee (§2.5) therefore holds **within the supported subset**: if a
 schema restricts itself to supported keywords, SDK-valid data conforms to the
@@ -386,6 +427,9 @@ validity against a full JSON Schema validator for that keyword.
 | `maxLength` | `Must be at most N characters.` |
 | `pattern` | `Must match the pattern "…".` |
 | `enum` | `Must be one of the allowed options.` |
+| `format` (date) | `Must be a valid date.` |
+| `format` (time) | `Must be a valid time.` |
+| `format` (date-time) | `Must be a valid date and time.` |
 | `minimum` | `Must be greater than or equal to N.` |
 | `maximum` | `Must be less than or equal to N.` |
 | type (string) | `Must be a string.` |
