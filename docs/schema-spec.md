@@ -297,7 +297,7 @@ The value is validated for both shape and real calendar/clock validity:
 | `format`    | Accepts                     | Rejects                                            | Message                        |
 | ----------- | --------------------------- | -------------------------------------------------- | ------------------------------ |
 | `date`      | a real `YYYY-MM-DD` date    | `2026-02-30`, `08/14/2026`                         | `Must be a valid date.`        |
-| `time`      | a real 24-hour time         | `24:00`, `9:5`                                     | `Must be a valid time.`        |
+| `time`      | a real 24-hour time         | `24:00`, `9:5`, `23:59:60` (no leap seconds)      | `Must be a valid time.`        |
 | `date-time` | UTC `…:00Z`, zero seconds   | an offset (`+02:00`), non-zero seconds, missing `Z` | `Must be a valid date and time.` |
 
 > `date-time` is deliberately **stricter than RFC 3339**: only UTC `Z` with zero

@@ -378,6 +378,16 @@ describe('validateDocument', () => {
       expect(errors['/data/when']?.keyword).to.equal('format');
     });
 
+    it('rejects a leap second at 23:59:60', () => {
+      const { errors } = setup(field('time'), { when: '23:59:60' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+    });
+
+    it('rejects second 60 at any other time', () => {
+      const { errors } = setup(field('time'), { when: '12:00:60' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+    });
+
     it('treats an empty value as absent (no format error)', () => {
       const { errors } = setup(field('date'), { when: '' });
       expect(errors).to.deep.equal({});

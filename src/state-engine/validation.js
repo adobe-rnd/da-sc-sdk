@@ -72,9 +72,8 @@ function isValidYmd(year, month, day) {
   return day <= lengths[month - 1];
 }
 
-// Wall-clock components. Seconds allow 60 for RFC 3339 leap seconds.
 function isValidHms(hour, minute, second) {
-  return hour <= 23 && minute <= 59 && second <= 60;
+  return hour <= 23 && minute <= 59 && second <= 59;
 }
 
 // Returns a message when the value doesn't match its `format`, else null.
