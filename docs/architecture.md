@@ -138,6 +138,7 @@ Nodes:
   defaultValue,            // schema default
   validation,              // picked subset: minLength, maxLength, pattern, minimum, maximum
   enumValues?,             // when present, consumer should render a select
+  format?,                 // 'date' | 'time' | 'date-time' — render a date/time control
   // object:      children: [...], unsupportedComposition?: { compositionKeyword, variants, schemaPath }
   // array:       items: [...], minItems, maxItems, itemLabel
   // unsupported: unsupported: { reason, feature, compositionKeyword, variants, schemaPath }
@@ -288,6 +289,7 @@ The full per-keyword reference:
 | `enum` | value not in `enumValues` | pointer to the value | `{ allowedValues: [...] }` |
 | `minLength` / `maxLength` | string length out of range | pointer to the value | `{ limit: <n> }` |
 | `pattern` | string fails the regex | pointer to the value | `{ pattern: '<regex source>' }` |
+| `format` | `date`/`time`/`date-time` value has an invalid shape or value | pointer to the value | `{ format: 'date' \| 'time' \| 'date-time' }` |
 | `minimum` / `maximum` | number out of range | pointer to the value | `{ limit: <n> }` |
 | `minItems` / `maxItems` | non-empty item count out of range (blank items don't count) | pointer to the value | `{ limit: <n> }` |
 

@@ -291,6 +291,109 @@ describe('validateDocument', () => {
     });
   });
 
+  describe('format (date / date-time / time)', () => {
+    const field = (format) => ({
+      type: 'object', properties: { when: { type: 'string', format } },
+    });
+
+    it('accepts a valid date', () => {
+      const { errors } = setup(field('date'), { when: '2026-08-14' });
+      expect(errors).to.deep.equal({});
+    });
+
+    it('rejects a malformed date', () => {
+      const { errors } = setup(field('date'), { when: '08/14/2026' });
+      expect(errors['/data/when']).to.deep.equal({
+        keyword: 'format',
+        instancePath: '/data/when',
+        params: { format: 'date' },
+        message: 'Must be a valid date.',
+      });
+    });
+
+    it('rejects an impossible calendar date', () => {
+      const { errors } = setup(field('date'), { when: '2026-02-30' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+    });
+
+    it('accepts Feb 29 on a leap year', () => {
+      const { errors } = setup(field('date'), { when: '2024-02-29' });
+      expect(errors).to.deep.equal({});
+    });
+
+    it('accepts a UTC date-time', () => {
+      const { errors } = setup(field('date-time'), { when: '2026-08-14T13:00:00Z' });
+      expect(errors).to.deep.equal({});
+    });
+
+    it("accepts the editor's millisecond UTC form", () => {
+      const { errors } = setup(field('date-time'), { when: '2026-08-14T13:00:00.000Z' });
+      expect(errors).to.deep.equal({});
+    });
+
+    it('rejects a non-UTC offset (one canonical storage form)', () => {
+      const { errors } = setup(field('date-time'), { when: '2026-08-14T13:00:00+02:00' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+      expect(errors['/data/when']?.params).to.deep.equal({ format: 'date-time' });
+    });
+
+    it('rejects non-zero seconds (minute precision only)', () => {
+      const { errors } = setup(field('date-time'), { when: '2026-08-14T13:00:30Z' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+    });
+
+    it('rejects a date-time missing the offset (not an absolute instant)', () => {
+      const { errors } = setup(field('date-time'), { when: '2026-08-14T13:00:00' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+      expect(errors['/data/when']?.params).to.deep.equal({ format: 'date-time' });
+    });
+
+    it('accepts the minimum 4-digit-year boundary the editor can emit', () => {
+      const { errors } = setup(field('date-time'), { when: '0001-01-01T00:00:00Z' });
+      expect(errors).to.deep.equal({});
+    });
+
+    it('rejects a date-time with an out-of-range time component', () => {
+      const { errors } = setup(field('date-time'), { when: '2026-08-14T24:00:00Z' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+    });
+
+    it('rejects a date-time with an impossible calendar date', () => {
+      const { errors } = setup(field('date-time'), { when: '2026-02-30T12:00:00Z' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+    });
+
+    it('accepts a floating time with no offset', () => {
+      const { errors } = setup(field('time'), { when: '09:00' });
+      expect(errors).to.deep.equal({});
+    });
+
+    it('accepts a floating time with seconds', () => {
+      const { errors } = setup(field('time'), { when: '09:00:30' });
+      expect(errors).to.deep.equal({});
+    });
+
+    it('rejects an out-of-range time', () => {
+      const { errors } = setup(field('time'), { when: '25:61' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+    });
+
+    it('rejects a leap second at 23:59:60', () => {
+      const { errors } = setup(field('time'), { when: '23:59:60' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+    });
+
+    it('rejects second 60 at any other time', () => {
+      const { errors } = setup(field('time'), { when: '12:00:60' });
+      expect(errors['/data/when']?.keyword).to.equal('format');
+    });
+
+    it('treats an empty value as absent (no format error)', () => {
+      const { errors } = setup(field('date'), { when: '' });
+      expect(errors).to.deep.equal({});
+    });
+  });
+
   describe('number / integer', () => {
     it('rejects below minimum', () => {
       const { errors } = setup(

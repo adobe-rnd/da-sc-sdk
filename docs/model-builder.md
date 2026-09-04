@@ -86,6 +86,9 @@ Every node carries the same base fields, plus kind-specific extras.
   // primitive with enum:
   enumValues:  [...],      // when present, the editor renders a <select>
 
+  // string with date/time format:
+  format:      '…',        // 'date' | 'time' | 'date-time' — editor renders a date/time control
+
   // unsupported:
   unsupported: { reason, feature, compositionKeyword, variants, schemaPath },
 }
