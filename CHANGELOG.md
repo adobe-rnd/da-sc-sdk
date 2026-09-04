@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/adobe/da-sc-sdk/compare/v0.4.0...v0.5.0) (2026-09-04)
+
+
+### Features
+
+* **engine:** support date, time and date-time formats ([#15](https://github.com/adobe/da-sc-sdk/issues/15)) ([9e1e048](https://github.com/adobe/da-sc-sdk/commit/9e1e048355eb51a0bdf58fadebcb0276b6186938))
+
 # [0.4.0](https://github.com/adobe/da-sc-sdk/compare/v0.3.0...v0.4.0) (2026-08-14)
 
 
