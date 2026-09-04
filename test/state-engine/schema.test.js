@@ -118,6 +118,26 @@ describe('compileSchema', () => {
       });
     });
 
+    it('lets enum win over format', () => {
+      const { definition } = compileSchema({
+        type: 'object',
+        properties: { when: { type: 'string', enum: ['2026-08-14'], format: 'date' } },
+      });
+      const when = definition.children[0];
+      expect(when.enumValues).to.deep.equal(['2026-08-14']);
+      expect(when.format).to.equal(undefined);
+    });
+
+    it('lets format win over x-semantic-type', () => {
+      const { definition } = compileSchema({
+        type: 'object',
+        properties: { when: { type: 'string', format: 'date', 'x-semantic-type': 'long-text' } },
+      });
+      const when = definition.children[0];
+      expect(when.format).to.equal('date');
+      expect(when.semanticType).to.equal(undefined);
+    });
+
     it('drops an unsupported format value', () => {
       const { definition } = compileSchema({
         type: 'object',

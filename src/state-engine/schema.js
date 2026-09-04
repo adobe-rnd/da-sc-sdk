@@ -459,17 +459,13 @@ function compileNode({
     return { ...base, enumValues: schema.enum };
   }
 
-  // Vendor semantic-type hint. Carried onto the node only when the value is
-  // recognized and applies to this field's kind (see SEMANTIC_TYPES); unknown
-  // values or type mismatches are dropped. `enum` takes precedence above.
-  if (SEMANTIC_TYPES.get(schema?.['x-semantic-type']) === kind) {
-    return { ...base, semanticType: schema['x-semantic-type'] };
-  }
-
-  // Native RFC 3339 date/time hint. Only applies to strings; drives the widget
-  // kind and the value-shape check in validation.js.
   if (kind === 'string' && DATE_FORMATS.has(schema?.format)) {
     return { ...base, format: schema.format };
+  }
+
+  // Vendor hint; `enum` and the standard `format` keyword take precedence above.
+  if (SEMANTIC_TYPES.get(schema?.['x-semantic-type']) === kind) {
+    return { ...base, semanticType: schema['x-semantic-type'] };
   }
 
   return base;

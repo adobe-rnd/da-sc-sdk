@@ -205,8 +205,8 @@ These keywords describe presentation. They do not constrain the value.
 ### Vendor annotations
 
 Vendor extensions are keywords outside standard JSON Schema, prefixed `x-`. They carry presentation
-intent and do not constrain the value. Only the keywords and values defined below have meaning;
-anything else is undefined.
+intent and do not constrain the value. Only the keywords and values defined below are recognized;
+anything else is ignored.
 
 | Keyword | Type | Applies to | Effect |
 | ------- | ---- | ---------- | ------ |
@@ -221,9 +221,9 @@ single-line value.
 { "type": "string", "title": "Summary", "maxLength": 2000, "x-semantic-type": "long-text" }
 ```
 
-- Valid only on `string`; on any other type it has no meaning.
-- If `enum` is also present, `enum` applies and `x-semantic-type` has no effect.
-- `long-text` is the only defined value; any other value has no meaning.
+- Valid only on `string`; on any other type it is ignored.
+- If `enum` or a supported `format` is also present, that keyword applies and `x-semantic-type` has no effect (it is vendor glue; the standard keyword wins).
+- `long-text` is the only defined value; any other value is ignored.
 - Does not affect validation — `minLength`, `maxLength`, and `pattern` apply independently.
 
 ---
@@ -243,6 +243,8 @@ These keywords restrict the value. Validation reports an error when violated.
 | `maximum`            | number | number, integer  |
 | `minItems`           | int    | array            |
 | `maxItems`           | int    | array            |
+
+On a single `string` node, do not combine `enum`, `format`, and `x-semantic-type` — they are mutually exclusive. If more than one is present, precedence is `enum` > `format` > `x-semantic-type`, and the losers are ignored.
 
 `enum` example:
 
@@ -280,8 +282,9 @@ control, and the stored value is constrained to a single canonical shape.
 | `time`      | Floating wall-clock time (24-hour)  | `HH:MM` or `HH:MM:SS`     | `09:30`                  |
 | `date-time` | Absolute instant, in UTC            | `YYYY-MM-DDTHH:MM:00Z`    | `2026-08-14T13:00:00Z`   |
 
-- Valid only on `string`. On any other type it has no effect.
+- Valid only on `string`. On any other type it is ignored.
 - If `enum` is also present, `enum` applies and `format` has no effect.
+- If `x-semantic-type` is also present, `format` wins — a supported `format` beats the vendor `x-semantic-type` hint.
 - **`date` and `time` are floating** — they carry no time zone and mean the same
   everywhere (a publish date, store opening hours).
 - **`date-time` is an absolute instant, stored in UTC** (trailing `Z`) at minute
@@ -458,7 +461,9 @@ A schema exercising every supported keyword, including reusable shapes that refe
     "summary": {
       "type": "string",
       "title": "Summary",
-      "maxLength": 280
+      "description": "A short abstract shown in listings.",
+      "maxLength": 280,
+      "x-semantic-type": "long-text"
     },
     "status": {
       "type": "string",
@@ -488,6 +493,11 @@ A schema exercising every supported keyword, including reusable shapes that refe
       "type": "string",
       "title": "Published at",
       "format": "date-time"
+    },
+    "dailyStandup": {
+      "type": "string",
+      "title": "Daily standup",
+      "format": "time"
     },
     "archived": {
       "type": "boolean",
